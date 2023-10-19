@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'firebase_options.dart';
 
@@ -10,6 +11,10 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   fcmNotification();
+  setupInteractedMessage();
+
+  FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+
   runApp(const MyApp());
 }
 Future<void> setupInteractedMessage() async {
@@ -26,18 +31,68 @@ Future<void> setupInteractedMessage() async {
     provisional: false,
     sound: true,
   );
+  const AndroidNotificationChannel channel = AndroidNotificationChannel(
+    'high_importance_channel', // id
+    'High Importance Notifications', // title
+    importance: Importance.max,
+  );
+  final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+  FlutterLocalNotificationsPlugin();
+  const AndroidInitializationSettings initializationSettingsAndroid =  AndroidInitializationSettings('icon');
+
+
+  final InitializationSettings initializationSettings = const InitializationSettings(
+      android: initializationSettingsAndroid);
+  await flutterLocalNotificationsPlugin.initialize(initializationSettings);
+/*  await flutterLocalNotificationsPlugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(channel);*/
 
   FirebaseMessaging.onMessage.listen((RemoteMessage message) {
     print('Got a message whilst in the foreground!');
     print('Message data: ${message.data.values}');
-
+    //_firebaseMessagingBackgroundHandler( message);
+    //_firebaseMessagingBackgroundHandler(message);
     if (message.notification != null) {
-      print('Message also contained a notification: ${message.notification}');
+      //var platform=message.notification?.android;
+      print('Message also contained a notification Title: ${message.notification?.title}');
+      print('Message also contained a notification Body: ${message.notification?.body}');
+      RemoteNotification? notification = message.notification;
+      //AndroidNotification? android = message.notification?.android;
+      // If `onMessage` is triggered with a notification, construct our own
+      // local notification to show to users using the created channel.
+      if (notification != null) {
+        flutterLocalNotificationsPlugin.show(
+            notification.hashCode,
+            notification.title,
+            notification.body,
+            NotificationDetails(
+              android: AndroidNotificationDetails(
+                channel.id,
+                channel.name,
+                // other properties...
+              ),
+            ));
+      }
     }
+
 
   });
 }
 
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // If you're going to use other Firebase services in the background, such as Firestore,
+  // make sure you call `initializeApp` before using other Firebase services.
+  await Firebase.initializeApp();
+  print("Handling a background message data: ${message.data.values}");
+
+
+  if (message.notification != null) {
+    print("Handling a background message Title: ${message.notification?.title}");
+    print("Handling a background message body: ${message.notification?.body}");
+  }
+}
 
 void fcmNotification() async{
   final fcmToken = await FirebaseMessaging.instance.getToken();
@@ -60,7 +115,6 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
-    setupInteractedMessage();
     return MaterialApp(
       title: 'Flutter Demo',
       theme: ThemeData(
